@@ -1,0 +1,80 @@
+name: Go
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: 1.17
+
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v3
+        with:
+          persist-credentials: true
+
+      - name: Get dependencies
+        run: |
+          go mod download
+
+      - uses: setare/go-lint-action@v0.1.2
+
+  security:
+    name: Security checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: 1.17
+        id: go
+
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v3
+
+      - name: Get dependencies
+        env:
+          GOPRIVATE: github.com/setare
+        run: |
+          go mod download
+
+      - uses: setare/go-gosec-action@v0.1.0
+
+  unit-tests:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    needs:
+      - lint
+      - security
+    steps:
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: 1.17
+        id: go
+
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v3
+
+      - name: Get dependencies
+        run: |
+          go mod download
+
+      - name: Unit tests
+        run: |
+          go test -race -covermode=atomic -coverprofile=coverage.out ./...
+
+      - name: Upload coverage report
+        uses: codecov/codecov-action@v2.1.0
+        with:
+          token: ${{secrets.CODECOV_TOKEN}}
+          file: ./coverage.out
+          flags: unittests
+          name: codecov-umbrella
