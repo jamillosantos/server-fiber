@@ -45,7 +45,7 @@ jobs:
         run: |
           go mod download
 
-      - uses: setare/go-gosec-action@v0.1.0
+      - uses: setare/go-gosec-action@v0.2.2
 
   unit-tests:
     name: Unit tests
