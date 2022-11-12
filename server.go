@@ -2,6 +2,8 @@ package srvfiber
 
 import (
 	"context"
+	"errors"
+	"sync/atomic"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -13,6 +15,10 @@ var (
 		WriteTimeout:          30 * time.Second,
 		DisableStartupMessage: true,
 	}
+)
+
+var (
+	ErrNotReady = errors.New("service is not ready")
 )
 
 type opts struct {
@@ -63,6 +69,7 @@ type FiberServer struct {
 	app         *fiber.App
 	config      opts
 	initializer Initializer
+	ready       atomic.Value
 }
 
 type Option = func(cfg *opts)
@@ -96,9 +103,21 @@ func (server *FiberServer) Listen(_ context.Context) error {
 		}
 	}
 
+	server.ready.Store(true)
+	defer server.ready.Store(false)
+
 	return server.app.Listen(server.config.bindAddress)
 }
 
 func (server *FiberServer) Close(_ context.Context) error {
 	return server.app.Shutdown()
+}
+
+// IsReady will return true if the service is ready to accept requests. This is compliant with the
+// github.com/jamillosantos/application library.
+func (g *FiberServer) IsReady(_ context.Context) error {
+	if v := g.ready.Load(); v == nil || v == false {
+		return ErrNotReady
+	}
+	return nil
 }
