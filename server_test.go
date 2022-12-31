@@ -41,22 +41,26 @@ func TestNewServerFiber(t *testing.T) {
 			return nil
 		}, WithBindAddress(":18080"))
 
-		go func() {
-			time.Sleep(time.Second)
-			resp, err := http.DefaultClient.Get("http://localhost:18080/test")
-
-			require.NoError(t, err)
-			defer func() {
-				_ = resp.Body.Close()
-			}()
-
-			assert.Equal(t, http.StatusOK, resp.StatusCode)
-			body, _ := io.ReadAll(resp.Body)
-			assert.Equal(t, "true", string(body))
-			_ = got.Close(ctx)
-		}()
 		err := got.Listen(ctx)
 		assert.NoError(t, err)
+
+		var (
+			resp *http.Response
+		)
+
+		require.Eventually(t, func() bool {
+			resp, err = http.DefaultClient.Get("http://localhost:18080/test")
+			return assert.NoError(t, err)
+		}, time.Second, time.Millisecond*50)
+
+		defer func() {
+			_ = resp.Body.Close()
+		}()
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		body, _ := io.ReadAll(resp.Body)
+		assert.Equal(t, "true", string(body))
+		_ = got.Close(ctx)
 	})
 
 	t.Run("intializer failed", func(t *testing.T) {

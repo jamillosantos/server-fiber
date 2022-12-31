@@ -3,6 +3,8 @@ package srvfiber
 import (
 	"context"
 	"errors"
+	"net"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -70,6 +72,8 @@ type FiberServer struct {
 	config      opts
 	initializer Initializer
 	ready       atomic.Value
+	serverWg    sync.WaitGroup
+	listener    net.Listener
 }
 
 type Option = func(cfg *opts)
@@ -86,37 +90,54 @@ func NewFiberServer(initializer Initializer, opts ...Option) *FiberServer {
 	}
 }
 
-func (server *FiberServer) Name() string {
-	return server.config.name
+func (f *FiberServer) Name() string {
+	return f.config.name
 }
 
-func (server *FiberServer) Listen(_ context.Context) error {
+func (f *FiberServer) Listen(_ context.Context) error {
 	config := defaultSettings
-	server.config.apply(&config)
+	f.config.apply(&config)
 
-	server.app = fiber.New(config)
+	f.app = fiber.New(config)
 
-	if server.initializer != nil {
-		err := server.initializer(server.app)
+	if f.initializer != nil {
+		err := f.initializer(f.app)
 		if err != nil {
 			return err
 		}
 	}
 
-	server.ready.Store(true)
-	defer server.ready.Store(false)
+	l, err := net.Listen("tcp", f.config.bindAddress)
+	if err != nil {
+		return err
+	}
 
-	return server.app.Listen(server.config.bindAddress)
+	f.serverWg.Add(1)
+	go func() {
+		f.ready.Store(true)
+		defer func() {
+			f.serverWg.Done()
+			f.ready.Store(false)
+		}()
+
+		f.listener = l
+		_ = f.app.Listener(l)
+	}()
+
+	return nil
 }
 
-func (server *FiberServer) Close(_ context.Context) error {
-	return server.app.Shutdown()
+func (f *FiberServer) Close(_ context.Context) error {
+	err := f.app.Shutdown()
+	_ = f.listener.Close()
+	f.serverWg.Wait()
+	return err
 }
 
 // IsReady will return true if the service is ready to accept requests. This is compliant with the
 // github.com/jamillosantos/application library.
-func (g *FiberServer) IsReady(_ context.Context) error {
-	if v := g.ready.Load(); v == nil || v == false {
+func (f *FiberServer) IsReady(_ context.Context) error {
+	if v := f.ready.Load(); v == nil || v == false {
 		return ErrNotReady
 	}
 	return nil
