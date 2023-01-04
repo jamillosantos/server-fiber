@@ -24,6 +24,7 @@ var (
 )
 
 type opts struct {
+	listener    net.Listener
 	bindAddress string
 	appName     string
 	name        string
@@ -38,6 +39,14 @@ func defaultOpts() opts {
 		name:        "Fiber Server",
 		appName:     "fiber-server",
 		bindAddress: ":8080",
+	}
+}
+
+// WithListener will set the listener to be used by the server. If no listener is set, the server will start a new one
+// using the bind address.
+func WithListener(l net.Listener) Option {
+	return func(o *opts) {
+		o.listener = l
 	}
 }
 
@@ -107,9 +116,14 @@ func (f *FiberServer) Listen(_ context.Context) error {
 		}
 	}
 
-	l, err := net.Listen("tcp", f.config.bindAddress)
-	if err != nil {
-		return err
+	l := f.config.listener
+
+	if l == nil {
+		newL, err := net.Listen("tcp", f.config.bindAddress)
+		if err != nil {
+			return err
+		}
+		l = newL
 	}
 
 	f.serverWg.Add(1)
