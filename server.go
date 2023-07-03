@@ -24,14 +24,18 @@ var (
 )
 
 type opts struct {
-	listener    net.Listener
-	bindAddress string
-	appName     string
-	name        string
+	listener     net.Listener
+	bindAddress  string
+	appName      string
+	name         string
+	errorHandler fiber.ErrorHandler
 }
 
 func (o opts) apply(f *fiber.Config) {
 	f.AppName = o.appName
+	if o.errorHandler != nil {
+		f.ErrorHandler = o.errorHandler
+	}
 }
 
 func defaultOpts() opts {
@@ -68,6 +72,12 @@ func WithName(name string) Option {
 		if o.appName == "" {
 			o.appName = name
 		}
+	}
+}
+
+func WithErrorHandler(handler fiber.ErrorHandler) Option {
+	return func(o *opts) {
+		o.errorHandler = handler
 	}
 }
 
