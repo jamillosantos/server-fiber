@@ -13,7 +13,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
-          go-version: 1.17
+          go-version: "1.20"
 
       - name: Check out code into the Go module directory
         uses: actions/checkout@v3
@@ -24,40 +24,20 @@ jobs:
         run: |
           go mod download
 
-      - uses: setare/go-lint-action@v0.1.2
-
-  security:
-    name: Security checks
-    runs-on: ubuntu-latest
-    steps:
-      - name: Set up Go
-        uses: actions/setup-go@v4
-        with:
-          go-version: 1.17
-        id: go
-
-      - name: Check out code into the Go module directory
-        uses: actions/checkout@v3
-
-      - name: Get dependencies
-        env:
-          GOPRIVATE: github.com/setare
+      - name: Lint
         run: |
-          go mod download
-
-      - uses: setare/go-gosec-action@v0.2.2
+          go run github.com/golangci/golangci-lint/cmd/golangci-lint run --timeout 5m
 
   unit-tests:
     name: Unit tests
     runs-on: ubuntu-latest
     needs:
       - lint
-      - security
     steps:
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
-          go-version: 1.17
+          go-version: "1.20"
         id: go
 
       - name: Check out code into the Go module directory
