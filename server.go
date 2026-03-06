@@ -13,9 +13,8 @@ import (
 
 var (
 	defaultSettings = fiber.Config{
-		ReadTimeout:           30 * time.Second,
-		WriteTimeout:          30 * time.Second,
-		DisableStartupMessage: true,
+		ReadTimeout:  30 * time.Second,
+		WriteTimeout: 30 * time.Second,
 	}
 )
 
