@@ -8,14 +8,13 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 )
 
 var (
 	defaultSettings = fiber.Config{
-		ReadTimeout:           30 * time.Second,
-		WriteTimeout:          30 * time.Second,
-		DisableStartupMessage: true,
+		ReadTimeout:  30 * time.Second,
+		WriteTimeout: 30 * time.Second,
 	}
 )
 

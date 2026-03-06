@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -35,7 +35,7 @@ func TestNewServerFiber(t *testing.T) {
 		ctx := context.TODO()
 
 		got := NewFiberServer(func(app *fiber.App) error {
-			app.Get("/test", func(ctx *fiber.Ctx) error {
+			app.Get("/test", func(ctx fiber.Ctx) error {
 				return ctx.JSON(true)
 			})
 			return nil
