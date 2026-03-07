@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/cenkalti/backoff/v5"
 	"github.com/gofiber/fiber/v3"
 )
 
@@ -124,8 +125,9 @@ func (f *FiberServer) Name() string {
 }
 
 // Listen initializes the Fiber app, runs the Initializer to register routes, binds a TCP listener,
-// and starts serving requests in a background goroutine. It returns immediately after the goroutine
-// is spawned; use IsReady to confirm the server is accepting connections.
+// and starts serving requests in a background goroutine. A second goroutine probes the bound address
+// with repeated dial attempts and marks the server ready once a connection succeeds.
+// Use IsReady to check when the server is actually accepting connections.
 //
 // Returns an error if the Initializer fails or if the TCP listener cannot be created.
 func (f *FiberServer) Listen(_ context.Context) error {
@@ -151,10 +153,33 @@ func (f *FiberServer) Listen(_ context.Context) error {
 		l = newL
 	}
 
+	f.listener = l
+
 	f.serverWg.Add(1)
 	go func() {
-		f.listener = l
-		_ = f.app.Listener(l)
+		defer f.serverWg.Done()
+
+		// TODO(J): Implement a way to customize the ListenConfig.
+		_ = f.app.Listener(l, fiber.ListenConfig{
+			DisableStartupMessage: true,
+		})
+	}()
+
+	go func() {
+		b := backoff.NewExponentialBackOff()
+		b.MaxInterval = time.Second
+		b.InitialInterval = time.Millisecond
+
+		addr := l.Addr().String()
+		for {
+			conn, err := net.Dial("tcp", addr)
+			if err == nil {
+				_ = conn.Close()
+				f.ready.Store(true)
+				return
+			}
+			time.Sleep(b.NextBackOff())
+		}
 	}()
 
 	return nil

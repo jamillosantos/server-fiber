@@ -48,3 +48,5 @@ if err := server.Close(ctx); err != nil {
 ```go
 err := server.IsReady(ctx) // returns ErrNotReady if not yet listening
 ```
+
+`IsReady` returns `nil` only after the server is confirmed to be accepting connections. It returns `ErrNotReady` again once `Close` returns, so it accurately reflects the server's lifecycle state.
