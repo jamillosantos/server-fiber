@@ -1,0 +1,58 @@
+name: Auto-tag on merge
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  tag:
+    name: Create version tag
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Determine bump type from commit message
+        id: bump
+        run: |
+          MSG=$(git log -1 --pretty=%B)
+          if echo "$MSG" | grep -qE '^(feat|fix|refactor|chore|docs|test|perf|ci|build|revert)(\(.+\))?!:' || echo "$MSG" | grep -q 'BREAKING CHANGE'; then
+            echo "type=major" >> "$GITHUB_OUTPUT"
+          elif echo "$MSG" | grep -qE '^feat(\(.+\))?:'; then
+            echo "type=minor" >> "$GITHUB_OUTPUT"
+          else
+            echo "type=patch" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Compute next tag
+        id: next
+        run: |
+          MODULE=$(grep '^module ' go.mod | awk '{print $2}')
+          MAJOR=$(echo "$MODULE" | grep -oE '/v[0-9]+$' | grep -oE '[0-9]+' || echo "1")
+
+          LATEST=$(git tag --list "v${MAJOR}.*" --sort=-v:refname | head -1)
+          VERSION="${LATEST:-v${MAJOR}.0.0}"
+          VERSION="${VERSION#v}"
+
+          MAJOR_N=$(echo "$VERSION" | cut -d. -f1)
+          MINOR_N=$(echo "$VERSION" | cut -d. -f2)
+          PATCH_N=$(echo "$VERSION" | cut -d. -f3)
+
+          case "${{ steps.bump.outputs.type }}" in
+            major) MAJOR_N=$((MAJOR_N + 1)); MINOR_N=0; PATCH_N=0 ;;
+            minor) MINOR_N=$((MINOR_N + 1)); PATCH_N=0 ;;
+            patch) PATCH_N=$((PATCH_N + 1)) ;;
+          esac
+
+          echo "tag=v${MAJOR_N}.${MINOR_N}.${PATCH_N}" >> "$GITHUB_OUTPUT"
+
+      - name: Create and push tag
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "${{ steps.next.outputs.tag }}"
+          git push origin "${{ steps.next.outputs.tag }}"
