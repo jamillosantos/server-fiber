@@ -19,6 +19,7 @@ var (
 )
 
 var (
+	// ErrNotReady is returned by IsReady when the server goroutine has not started yet or has already shut down.
 	ErrNotReady = errors.New("service is not ready")
 )
 
@@ -53,18 +54,23 @@ func WithListener(l net.Listener) Option {
 	}
 }
 
+// WithBindAddress sets the TCP address the server will listen on (e.g. ":8080"). Defaults to ":8080".
+// Has no effect when a custom listener is set via WithListener.
 func WithBindAddress(bindAddress string) Option {
 	return func(o *opts) {
 		o.bindAddress = bindAddress
 	}
 }
 
+// WithAppName sets the Fiber application name, exposed in the Server HTTP response header.
 func WithAppName(appName string) Option {
 	return func(o *opts) {
 		o.appName = appName
 	}
 }
 
+// WithName sets the server's display name (returned by Name()) and also sets the Fiber app name
+// if it has not been set already.
 func WithName(name string) Option {
 	return func(o *opts) {
 		o.name = name
@@ -74,6 +80,7 @@ func WithName(name string) Option {
 	}
 }
 
+// WithErrorHandler sets a custom Fiber error handler that is invoked when a route returns an error.
 func WithErrorHandler(handler fiber.ErrorHandler) Option {
 	return func(o *opts) {
 		o.errorHandler = handler
@@ -84,7 +91,8 @@ func WithErrorHandler(handler fiber.ErrorHandler) Option {
 // and routes.
 type Initializer func(app *fiber.App) error
 
-// FiberServer represents the services.Server for fiber applications.
+// FiberServer implements a Fiber-based HTTP server with a managed lifecycle compatible with
+// github.com/jamillosantos/application. Use NewFiberServer to create an instance.
 type FiberServer struct {
 	app         *fiber.App
 	config      opts
@@ -94,9 +102,11 @@ type FiberServer struct {
 	listener    net.Listener
 }
 
+// Option is a functional option for configuring a FiberServer.
 type Option = func(cfg *opts)
 
-// NewFiberServer returns a new instance of FiberServer initialized.
+// NewFiberServer creates a new FiberServer. The initializer is called during Listen to register
+// routes and middleware. Pass functional options to override defaults (bind address, name, etc.).
 func NewFiberServer(initializer Initializer, opts ...Option) *FiberServer {
 	o := defaultOpts()
 	for _, opt := range opts {
@@ -108,10 +118,16 @@ func NewFiberServer(initializer Initializer, opts ...Option) *FiberServer {
 	}
 }
 
+// Name returns the server's display name as configured by WithName.
 func (f *FiberServer) Name() string {
 	return f.config.name
 }
 
+// Listen initializes the Fiber app, runs the Initializer to register routes, binds a TCP listener,
+// and starts serving requests in a background goroutine. It returns immediately after the goroutine
+// is spawned; use IsReady to confirm the server is accepting connections.
+//
+// Returns an error if the Initializer fails or if the TCP listener cannot be created.
 func (f *FiberServer) Listen(_ context.Context) error {
 	config := defaultSettings
 	f.config.apply(&config)
@@ -137,12 +153,6 @@ func (f *FiberServer) Listen(_ context.Context) error {
 
 	f.serverWg.Add(1)
 	go func() {
-		f.ready.Store(true)
-		defer func() {
-			f.serverWg.Done()
-			f.ready.Store(false)
-		}()
-
 		f.listener = l
 		_ = f.app.Listener(l)
 	}()
@@ -150,6 +160,8 @@ func (f *FiberServer) Listen(_ context.Context) error {
 	return nil
 }
 
+// Close gracefully shuts down the Fiber app, closes the listener, and waits for the server
+// goroutine to finish.
 func (f *FiberServer) Close(_ context.Context) error {
 	err := f.app.Shutdown()
 	_ = f.listener.Close()
@@ -157,8 +169,9 @@ func (f *FiberServer) Close(_ context.Context) error {
 	return err
 }
 
-// IsReady will return true if the service is ready to accept requests. This is compliant with the
-// github.com/jamillosantos/application library.
+// IsReady returns nil when the server goroutine is running and accepting connections.
+// Returns ErrNotReady if Listen has not been called yet or if the server has shut down.
+// Implements the readiness interface from github.com/jamillosantos/application.
 func (f *FiberServer) IsReady(_ context.Context) error {
 	if v := f.ready.Load(); v == nil || v == false {
 		return ErrNotReady
